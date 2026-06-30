@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Invoice Generator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #1a1a2e; --muted: #6b7280; --border: #e5e7eb;
+  --bg: #f9fafb; --white: #ffffff; --accent: #4f46e5;
+  --accent-light: #eef2ff; --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+}
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; }
+
+/* ── Layout ── */
+.app { display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
+.sidebar { background: var(--white); border-right: 1px solid var(--border); padding: 24px 20px; overflow-y: auto; }
+.preview-pane { padding: 24px; overflow-y: auto; }
+
+/* ── Sidebar header ── */
+.logo { font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+.logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; }
+
+/* ── Section labels ── */
+.section-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 20px 0 8px; }
+
+/* ── Template groups ── */
+.tpl-group-label { font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #aaa; margin: 10px 0 6px; }
+.template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+.tpl-btn { border: 2px solid var(--border); border-radius: var(--radius); padding: 8px 4px; text-align: center; cursor: pointer; background: var(--white); font-size: 10px; font-weight: 600; color: var(--muted); transition: all .15s; }
+.tpl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tpl-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+.tpl-swatch { height: 28px; border-radius: 5px; margin-bottom: 5px; }
+
+/* ── Form fields ── */
+.field { margin-bottom: 10px; }
+.field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.field input, .field textarea, .field select {
+  width: 100%; border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px;
+  font-size: 13px; color: var(--ink); background: var(--white);
+  transition: border-color .15s; outline: none; font-family: inherit;
+}
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+.field textarea { resize: vertical; min-height: 60px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ── Items ── */
+.items-list { display: flex; flex-direction: column; gap: 8px; }
+.item-row { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; position: relative; }
+.item-row input { background: transparent; border: none; border-bottom: 1px solid var(--border); border-radius: 0; padding: 2px 4px; font-size: 12px; }
+.item-row input:focus { border-bottom-color: var(--accent); box-shadow: none; }
+.item-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; }
+.remove-btn { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; }
+.remove-btn:hover { color: #ef4444; }
+.add-item-btn { border: 1px dashed var(--border); border-radius: 8px; padding: 8px; background: none; width: 100%; cursor: pointer; font-size: 12px; color: var(--muted); font-weight: 600; transition: all .15s; margin-top: 4px; }
+.add-item-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+/* ── Action buttons ── */
+.actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+.btn { display: block; width: 100%; padding: 11px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 700; cursor: pointer; text-align: center; transition: all .15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #4338ca; transform: translateY(-1px); }
+.btn-outline { background: var(--white); border: 1px solid var(--border); color: var(--ink); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Preview ── */
+.preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.preview-header h2 { font-size: 16px; font-weight: 700; }
+.preview-wrap { max-width: 720px; margin: 0 auto; }
+#invoice-canvas { background: var(--white); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+
+/* ════════════════════════════════════════
+   T1 — CLASSIC
+════════════════════════════════════════ */
+.tpl-classic { padding: 48px; }
+.tpl-classic .inv-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+.tpl-classic .inv-brand { font-size: 26px; font-weight: 800; color: #1a1a2e; letter-spacing: -.5px; }
+.tpl-classic .inv-title { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tpl-classic .inv-num { font-size: 22px; font-weight: 700; color: var(--ink); }
+.tpl-classic .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 36px; }
+.tpl-classic .party-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+.tpl-classic .party-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.tpl-classic .party-detail { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.tpl-classic .inv-meta { display: flex; gap: 32px; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+.tpl-classic .meta-key { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; font-weight: 700; color: var(--muted); margin-bottom: 3px; }
+.tpl-classic .meta-val { font-size: 14px; font-weight: 600; }
+.tpl-classic table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.tpl-classic th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; padding: 0 8px 10px; border-bottom: 2px solid var(--border); }
+.tpl-classic td { padding: 12px 8px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.tpl-classic .col-r { text-align: right; }
+.tpl-classic .totals { display: flex; justify-content: flex-end; }
+.tpl-classic .totals-box { width: 240px; }
+.tpl-classic .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
+.tpl-classic .totals-row.total { border-top: 2px solid var(--ink); margin-top: 4px; padding-top: 10px; font-size: 16px; font-weight: 800; }
+.tpl-classic .inv-notes { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.tpl-classic .inv-footer { margin-top: 32px; text-align: center; font-size: 11px; color: var(--muted); }
+
+/* ════════════════════════════════════════
+   T2 — MODERN (dark sidebar)
+════════════════════════════════════════ */
+.tpl-modern { display: grid; grid-template-columns: 180px 1fr; min-height: 600px; }
+.tpl-modern .mod-sidebar { background: #1a1a2e; color: #fff; padding: 40px 24px; }
+.tpl-modern .mod-body { padding: 40px; }
+.tpl-modern .mod-brand { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -.3px; margin-bottom: 32px; }
+.tpl-modern .mod-label { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.5); margin-bottom: 4px; font-weight: 700; }
+.tpl-modern .mod-value { font-size: 13px; color: #fff; margin-bottom: 18px; line-height: 1.5; }
+.tpl-modern .mod-accent-line { width: 32px; height: 3px; background: #4f46e5; border-radius: 2px; margin-bottom: 20px; }
+.tpl-modern .mod-title-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+.tpl-modern .mod-invoice-title { font-size: 32px; font-weight: 800; color: var(--ink); letter-spacing: -1px; }
+.tpl-modern .mod-meta { text-align: right; font-size: 12px; color: var(--muted); line-height: 1.8; }
+.tpl-modern .mod-to { margin-bottom: 28px; }
+.tpl-modern .mod-to-label { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+.tpl-modern .mod-to-name { font-size: 16px; font-weight: 700; }
+.tpl-modern .mod-to-detail { font-size: 12px; color: var(--muted); }
+.tpl-modern table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-modern th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; padding: 0 6px 8px; border-bottom: 2px solid #1a1a2e; }
+.tpl-modern td { padding: 10px 6px; font-size: 12px; border-bottom: 1px solid var(--border); }
+.tpl-modern .col-r { text-align: right; }
+.tpl-modern .totals { display: flex; justify-content: flex-end; }
+.tpl-modern .totals-box { width: 220px; }
+.tpl-modern .totals-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+.tpl-modern .totals-row.total { background: #1a1a2e; color: #fff; padding: 10px 12px; border-radius: 8px; font-weight: 800; font-size: 14px; margin-top: 6px; }
+.tpl-modern .inv-notes { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+
+/* ════════════════════════════════════════
+   T3 — MINIMAL (serif editorial)
+════════════════════════════════════════ */
+.tpl-minimal { padding: 56px 60px; font-family: Georgia, serif; }
+.tpl-minimal .min-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 48px; border-bottom: 1px solid #000; padding-bottom: 20px; }
+.tpl-minimal .min-brand { font-size: 24px; font-weight: 700; letter-spacing: -.5px; }
+.tpl-minimal .min-word { font-size: 36px; font-weight: 400; color: #ccc; letter-spacing: 4px; text-transform: uppercase; }
+.tpl-minimal .min-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+.tpl-minimal .min-label { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; color: #999; margin-bottom: 8px; }
+.tpl-minimal .min-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.tpl-minimal .min-detail { font-size: 13px; color: #666; line-height: 1.7; }
+.tpl-minimal .min-meta { display: flex; gap: 40px; margin-bottom: 36px; }
+.tpl-minimal .meta-key { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; color: #999; margin-bottom: 4px; }
+.tpl-minimal .meta-val { font-size: 14px; }
+.tpl-minimal table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-minimal th { text-align: left; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #999; font-weight: 700; padding: 0 0 12px; border-bottom: 1px solid #000; }
+.tpl-minimal td { padding: 11px 0; font-size: 13px; border-bottom: 1px solid #e5e7eb; }
+.tpl-minimal .col-r { text-align: right; }
+.tpl-minimal .totals { display: flex; justify-content: flex-end; }
+.tpl-minimal .totals-box { width: 200px; }
+.tpl-minimal .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; color: #666; }
+.tpl-minimal .totals-row.total { color: #000; font-weight: 700; font-size: 16px; border-top: 1px solid #000; padding-top: 10px; margin-top: 4px; }
+.tpl-minimal .inv-notes { margin-top: 40px; font-size: 12px; color: #999; font-family: 'Segoe UI', system-ui, sans-serif; }
+
+/* ════════════════════════════════════════
+   T4 — BOLD (indigo)
+════════════════════════════════════════ */
+.tpl-bold .bold-top { background: #4f46e5; color: #fff; padding: 40px 48px; }
+.tpl-bold .bold-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+.tpl-bold .bold-brand { font-size: 22px; font-weight: 900; letter-spacing: -.5px; }
+.tpl-bold .bold-num { font-size: 13px; opacity: .75; }
+.tpl-bold .bold-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.tpl-bold .bold-plabel { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; opacity: .6; font-weight: 700; margin-bottom: 5px; }
+.tpl-bold .bold-pname { font-size: 16px; font-weight: 800; }
+.tpl-bold .bold-pdetail { font-size: 12px; opacity: .8; line-height: 1.6; }
+.tpl-bold .bold-meta-bar { background: #3730a3; display: flex; }
+.tpl-bold .bold-meta-item { padding: 14px 32px; border-right: 1px solid rgba(255,255,255,.15); }
+.tpl-bold .bold-mkey { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.6); font-weight: 700; margin-bottom: 3px; }
+.tpl-bold .bold-mval { font-size: 14px; font-weight: 700; color: #fff; }
+.tpl-bold .bold-body { padding: 40px 48px; }
+.tpl-bold table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-bold th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; padding: 0 6px 10px; border-bottom: 2px solid #4f46e5; }
+.tpl-bold td { padding: 11px 6px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.tpl-bold .col-r { text-align: right; }
+.tpl-bold .totals { display: flex; justify-content: flex-end; }
+.tpl-bold .totals-box { width: 240px; }
+.tpl-bold .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
+.tpl-bold .totals-row.total { background: #4f46e5; color: #fff; padding: 12px 16px; border-radius: 8px; font-weight: 800; font-size: 16px; margin-top: 6px; }
+.tpl-bold .inv-notes { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+
+/* ════════════════════════════════════════
+   T5 — CORPORATE (green)
+════════════════════════════════════════ */
+.tpl-corp .corp-stripe { background: #10b981; height: 6px; }
+.tpl-corp .corp-head { padding: 36px 48px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+.tpl-corp .corp-brand { font-size: 22px; font-weight: 800; color: var(--ink); }
+.tpl-corp .corp-inv-title { font-size: 28px; font-weight: 900; color: #10b981; letter-spacing: -1px; }
+.tpl-corp .corp-inv-num { font-size: 13px; color: var(--muted); text-align: right; }
+.tpl-corp .corp-info { padding: 32px 48px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.tpl-corp .ci-label { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; color: var(--muted); margin-bottom: 5px; }
+.tpl-corp .ci-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.tpl-corp .ci-detail { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.tpl-corp .corp-body { padding: 32px 48px; }
+.tpl-corp table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-corp th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 700; padding: 0 6px 10px; border-bottom: 2px solid var(--border); }
+.tpl-corp td { padding: 12px 6px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.tpl-corp .col-r { text-align: right; }
+.tpl-corp .totals { display: flex; justify-content: flex-end; }
+.tpl-corp .totals-box { width: 240px; }
+.tpl-corp .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
+.tpl-corp .totals-row.total { border-top: 2px solid #10b981; padding-top: 10px; margin-top: 6px; font-size: 16px; font-weight: 800; color: #10b981; }
+.tpl-corp .inv-notes { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.tpl-corp .corp-foot { padding: 20px 48px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+/* ════════════════════════════════════════
+   T6 — BLOSSOM (pink / online biz)
+════════════════════════════════════════ */
+.tpl-blossom { background: #fff; }
+.tpl-blossom .bls-hero { background: linear-gradient(135deg, #fce4f3 0%, #ffd6e7 50%, #ffecd2 100%); padding: 40px 48px 32px; position: relative; overflow: hidden; }
+.tpl-blossom .bls-hero::before { content: '✿'; position: absolute; right: 40px; top: 20px; font-size: 80px; opacity: .15; }
+.tpl-blossom .bls-hero::after { content: '✿'; position: absolute; right: 10px; bottom: -10px; font-size: 50px; opacity: .1; }
+.tpl-blossom .bls-brand { font-size: 24px; font-weight: 800; color: #be185d; letter-spacing: -.5px; margin-bottom: 4px; }
+.tpl-blossom .bls-tagline { font-size: 12px; color: #db2777; opacity: .7; margin-bottom: 24px; }
+.tpl-blossom .bls-inv-row { display: flex; justify-content: space-between; align-items: flex-end; }
+.tpl-blossom .bls-inv-word { font-size: 38px; font-weight: 900; color: #be185d; letter-spacing: -2px; }
+.tpl-blossom .bls-inv-num { font-size: 13px; color: #9d174d; font-weight: 700; text-align: right; }
+.tpl-blossom .bls-pills { display: flex; gap: 8px; margin-top: 16px; }
+.tpl-blossom .bls-pill { background: rgba(255,255,255,.6); border-radius: 20px; padding: 5px 14px; font-size: 11px; font-weight: 700; color: #9d174d; backdrop-filter: blur(4px); }
+.tpl-blossom .bls-body { padding: 36px 48px; }
+.tpl-blossom .bls-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; }
+.tpl-blossom .bls-plabel { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #db2777; font-weight: 800; margin-bottom: 6px; }
+.tpl-blossom .bls-pname { font-size: 15px; font-weight: 700; color: #1a1a2e; }
+.tpl-blossom .bls-pdetail { font-size: 12px; color: #6b7280; line-height: 1.7; }
+.tpl-blossom table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-blossom th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #db2777; font-weight: 800; padding: 0 8px 10px; border-bottom: 2px solid #fce4f3; }
+.tpl-blossom td { padding: 12px 8px; font-size: 13px; border-bottom: 1px solid #fce4f3; }
+.tpl-blossom .col-r { text-align: right; }
+.tpl-blossom .totals { display: flex; justify-content: flex-end; }
+.tpl-blossom .totals-box { width: 240px; }
+.tpl-blossom .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
+.tpl-blossom .totals-row.total { background: linear-gradient(135deg,#be185d,#db2777); color: #fff; padding: 12px 16px; border-radius: 12px; font-weight: 800; font-size: 15px; margin-top: 8px; }
+.tpl-blossom .inv-notes { margin-top: 28px; padding: 16px 20px; background: #fff5f9; border-radius: 12px; font-size: 12px; color: #9d174d; border: 1px solid #fce4f3; }
+.tpl-blossom .bls-footer { margin-top: 24px; text-align: center; font-size: 12px; color: #db2777; font-weight: 600; }
+
+/* ════════════════════════════════════════
+   T7 — NEON DARK (gamer / streamer / tech)
+════════════════════════════════════════ */
+.tpl-neon { background: #0d0d1a; color: #e2e8f0; font-family: 'Courier New', monospace; }
+.tpl-neon .neo-header { padding: 40px 48px 32px; border-bottom: 1px solid #1e1e3a; display: flex; justify-content: space-between; align-items: flex-start; }
+.tpl-neon .neo-brand { font-size: 22px; font-weight: 900; color: #00fff7; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 20px rgba(0,255,247,.4); }
+.tpl-neon .neo-tagline { font-size: 10px; color: #7c3aed; letter-spacing: .2em; margin-top: 4px; }
+.tpl-neon .neo-inv-num { text-align: right; }
+.tpl-neon .neo-label { font-size: 9px; letter-spacing: .15em; color: #7c3aed; text-transform: uppercase; margin-bottom: 4px; }
+.tpl-neon .neo-val { font-size: 20px; font-weight: 900; color: #00fff7; text-shadow: 0 0 12px rgba(0,255,247,.3); }
+.tpl-neon .neo-body { padding: 32px 48px; }
+.tpl-neon .neo-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+.tpl-neon .neo-plabel { font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: #7c3aed; margin-bottom: 6px; }
+.tpl-neon .neo-pname { font-size: 15px; font-weight: 700; color: #fff; }
+.tpl-neon .neo-pdetail { font-size: 11px; color: #64748b; line-height: 1.7; }
+.tpl-neon .neo-meta { display: flex; gap: 0; margin-bottom: 32px; border: 1px solid #1e1e3a; border-radius: 8px; overflow: hidden; }
+.tpl-neon .neo-meta-item { flex: 1; padding: 12px 16px; border-right: 1px solid #1e1e3a; }
+.tpl-neon .neo-meta-item:last-child { border-right: none; }
+.tpl-neon .neo-mk { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #7c3aed; margin-bottom: 4px; }
+.tpl-neon .neo-mv { font-size: 13px; color: #00fff7; font-weight: 700; }
+.tpl-neon table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+.tpl-neon th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: #7c3aed; font-weight: 700; padding: 0 8px 12px; border-bottom: 1px solid #00fff7; }
+.tpl-neon td { padding: 12px 8px; font-size: 12px; color: #cbd5e1; border-bottom: 1px solid #1e1e3a; }
+.tpl-neon .col-r { text-align: right; }
+.tpl-neon .totals { display: flex; justify-content: flex-end; }
+.tpl-neon .totals-box { width: 240px; border: 1px solid #1e1e3a; border-radius: 8px; overflow: hidden; }
+.tpl-neon .totals-row { display: flex; justify-content: space-between; font-size: 12px; padding: 8px 16px; border-bottom: 1px solid #1e1e3a; color: #94a3b8; }
+.tpl-neon .totals-row.total { background: #00fff7; color: #0d0d1a; padding: 12px 16px; font-weight: 900; font-size: 14px; border: none; letter-spacing: .05em; }
+.tpl-neon .inv-notes { margin-top: 24px; padding: 16px; background: #0a0a14; border: 1px solid #1e1e3a; border-radius: 8px; font-size: 11px; color: #64748b; line-height: 1.7; }
+.tpl-neon .neo-footer { margin-top: 20px; padding: 16px 48px; border-top: 1px solid #1e1e3a; font-size: 10px; color: #334155; letter-spacing: .1em; text-align: center; }
+
+/* ════════════════════════════════════════
+   T8 — SUNSHINE (warm yellow / creator)
+════════════════════════════════════════ */
+.tpl-sun { background: #fffbeb; }
+.tpl-sun .sun-top { background: #fbbf24; padding: 0 48px; display: flex; justify-content: space-between; align-items: stretch; }
+.tpl-sun .sun-brand-box { padding: 32px 0; }
+.tpl-sun .sun-brand { font-size: 26px; font-weight: 900; color: #1c1917; letter-spacing: -1px; }
+.tpl-sun .sun-sub { font-size: 11px; color: #78350f; font-weight: 600; margin-top: 2px; }
+.tpl-sun .sun-badge { background: #1c1917; color: #fbbf24; padding: 12px 24px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 120px; }
+.tpl-sun .sun-badge-word { font-size: 10px; letter-spacing: .15em; text-transform: uppercase; margin-bottom: 4px; }
+.tpl-sun .sun-badge-num { font-size: 18px; font-weight: 900; }
+.tpl-sun .sun-body { padding: 36px 48px; }
+.tpl-sun .sun-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 28px; }
+.tpl-sun .sun-plabel { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #92400e; font-weight: 800; margin-bottom: 6px; }
+.tpl-sun .sun-pname { font-size: 15px; font-weight: 700; color: #1c1917; }
+.tpl-sun .sun-pdetail { font-size: 12px; color: #78716c; line-height: 1.7; }
+.tpl-sun .sun-meta { display: flex; gap: 0; margin-bottom: 32px; }
+.tpl-sun .sun-meta-item { background: #fef3c7; border-radius: 8px; padding: 12px 20px; margin-right: 8px; }
+.tpl-sun .sun-mk { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #92400e; font-weight: 700; margin-bottom: 3px; }
+.tpl-sun .sun-mv { font-size: 13px; font-weight: 700; color: #1c1917; }
+.tpl-sun table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-sun th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #92400e; font-weight: 800; padding: 0 8px 10px; border-bottom: 2px solid #fde68a; }
+.tpl-sun td { padding: 12px 8px; font-size: 13px; border-bottom: 1px solid #fef3c7; }
+.tpl-sun .col-r { text-align: right; }
+.tpl-sun .totals { display: flex; justify-content: flex-end; }
+.tpl-sun .totals-box { width: 240px; }
+.tpl-sun .totals-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; color: #78716c; }
+.tpl-sun .totals-row.total { background: #1c1917; color: #fbbf24; padding: 12px 16px; border-radius: 10px; font-weight: 900; font-size: 15px; margin-top: 8px; }
+.tpl-sun .inv-notes { margin-top: 28px; padding: 16px 20px; background: #fef3c7; border-radius: 10px; font-size: 12px; color: #78350f; }
+.tpl-sun .sun-footer { margin-top: 24px; text-align: center; font-size: 13px; color: #92400e; font-weight: 700; }
+
+/* ════════════════════════════════════════
+   T9 — SAGE (earthy / wellness / handmade)
+════════════════════════════════════════ */
+.tpl-sage { background: #f8f6f0; font-family: Georgia, serif; }
+.tpl-sage .sage-header { padding: 48px 52px 32px; display: flex; justify-content: space-between; align-items: flex-start; }
+.tpl-sage .sage-brand { font-size: 28px; font-weight: 700; color: #3d5a3e; letter-spacing: -.5px; }
+.tpl-sage .sage-brandtag { font-size: 11px; color: #6b7c6b; font-family: 'Segoe UI', system-ui; margin-top: 3px; }
+.tpl-sage .sage-inv-block { text-align: right; }
+.tpl-sage .sage-inv-label { font-family: 'Segoe UI', system-ui; font-size: 9px; text-transform: uppercase; letter-spacing: .15em; color: #8fad91; margin-bottom: 4px; }
+.tpl-sage .sage-inv-num { font-size: 20px; font-weight: 700; color: #3d5a3e; }
+.tpl-sage .sage-divider { height: 2px; background: linear-gradient(to right, #3d5a3e, #a8c5a0, transparent); margin: 0 52px 32px; }
+.tpl-sage .sage-parties { padding: 0 52px; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-bottom: 32px; }
+.tpl-sage .sage-plabel { font-family: 'Segoe UI', system-ui; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: #8fad91; font-weight: 700; margin-bottom: 8px; }
+.tpl-sage .sage-pname { font-size: 16px; font-weight: 700; color: #2d4a2e; }
+.tpl-sage .sage-pdetail { font-size: 12px; color: #6b7c6b; line-height: 1.8; font-family: 'Segoe UI', system-ui; }
+.tpl-sage .sage-meta { padding: 0 52px; display: flex; gap: 0; margin-bottom: 32px; }
+.tpl-sage .sage-meta-item { margin-right: 32px; }
+.tpl-sage .sage-mk { font-family: 'Segoe UI', system-ui; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: #8fad91; font-weight: 700; margin-bottom: 4px; }
+.tpl-sage .sage-mv { font-size: 14px; color: #3d5a3e; }
+.tpl-sage .sage-table-wrap { padding: 0 52px; }
+.tpl-sage table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.tpl-sage th { text-align: left; font-family: 'Segoe UI', system-ui; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; color: #8fad91; font-weight: 700; padding: 0 0 12px; border-bottom: 1px solid #c8ddc9; }
+.tpl-sage td { padding: 12px 0; font-size: 13px; border-bottom: 1px solid #e8f0e8; font-family: 'Segoe UI', system-ui; }
+.tpl-sage .col-r { text-align: right; }
+.tpl-sage .totals { display: flex; justify-content: flex-end; }
+.tpl-sage .totals-box { width: 220px; }
+.tpl-sage .totals-row { display: flex; justify-content: space-between; font-family: 'Segoe UI', system-ui; font-size: 13px; padding: 5px 0; color: #6b7c6b; }
+.tpl-sage .totals-row.total { color: #fff; background: #3d5a3e; padding: 12px 16px; border-radius: 10px; font-weight: 700; font-size: 15px; margin-top: 8px; }
+.tpl-sage .inv-notes { margin: 24px 52px 0; padding: 16px 20px; background: #eef4ee; border-left: 3px solid #3d5a3e; font-size: 12px; color: #6b7c6b; line-height: 1.7; font-family: 'Segoe UI', system-ui; }
+.tpl-sage .sage-footer { padding: 24px 52px; margin-top: 24px; text-align: center; font-size: 12px; color: #8fad91; font-family: 'Segoe UI', system-ui; border-top: 1px solid #c8ddc9; }
+
+/* ── Print ── */
+@media print {
+  .sidebar, .preview-header { display: none; }
+  .app { display: block; }
+  .preview-pane { padding: 0; }
+  #invoice-canvas { border-radius: 0; box-shadow: none; }
+}
+@media (max-width: 700px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar">
+  <div class="logo"><div class="logo-icon">📄</div> InvoiceFree</div>
+
+  <div class="section-label">Template</div>
+
+  <div class="tpl-group-label">✦ Business</div>
+  <div class="template-grid">
+    <button class="tpl-btn active" onclick="setTemplate('classic',this)">
+      <div class="tpl-swatch" style="background:#1a1a2e"></div>Classic
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('modern',this)">
+      <div class="tpl-swatch" style="background:linear-gradient(135deg,#1a1a2e 50%,#4f46e5 50%)"></div>Modern
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('minimal',this)">
+      <div class="tpl-swatch" style="background:#fff;border:1px solid #ddd"></div>Minimal
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('bold',this)">
+      <div class="tpl-swatch" style="background:#4f46e5"></div>Bold
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('corp',this)">
+      <div class="tpl-swatch" style="background:linear-gradient(to bottom,#10b981 20%,#fff 20%)"></div>Corporate
+    </button>
+  </div>
+
+  <div class="tpl-group-label" style="margin-top:14px">✦ Online / Creative</div>
+  <div class="template-grid">
+    <button class="tpl-btn" onclick="setTemplate('blossom',this)">
+      <div class="tpl-swatch" style="background:linear-gradient(135deg,#fce4f3,#ffd6e7,#ffecd2)"></div>🌸 Blossom
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('neon',this)">
+      <div class="tpl-swatch" style="background:#0d0d1a;border:1px solid #00fff7"></div>⚡ Neon
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('sun',this)">
+      <div class="tpl-swatch" style="background:linear-gradient(135deg,#fbbf24,#fffbeb)"></div>☀️ Sunshine
+    </button>
+    <button class="tpl-btn" onclick="setTemplate('sage',this)">
+      <div class="tpl-swatch" style="background:linear-gradient(135deg,#3d5a3e,#a8c5a0)"></div>🌿 Sage
+    </button>
+  </div>
+
+  <div class="section-label">From</div>
+  <div class="field"><label>Business / Your Name</label><input id="from-name" value="Acme Studio" oninput="render()"/></div>
+  <div class="field"><label>Address / Details</label><textarea id="from-detail" oninput="render()">123 Main Street
+Sydney NSW 2000
+hello@acme.studio</textarea></div>
+
+  <div class="section-label">To</div>
+  <div class="field"><label>Client Name</label><input id="to-name" value="Client Corp Ltd" oninput="render()"/></div>
+  <div class="field"><label>Address / Details</label><textarea id="to-detail" oninput="render()">456 King St
+Melbourne VIC 3000
+accounts@client.com</textarea></div>
+
+  <div class="section-label">Invoice Details</div>
+  <div class="two-col">
+    <div class="field"><label>Invoice #</label><input id="inv-num" value="INV-0001" oninput="render()"/></div>
+    <div class="field"><label>Date</label><input id="inv-date" type="date" oninput="render()"/></div>
+  </div>
+  <div class="two-col">
+    <div class="field"><label>Due Date</label><input id="due-date" type="date" oninput="render()"/></div>
+    <div class="field"><label>Currency</label>
+      <select id="currency" onchange="render()">
+        <option value="$">USD $</option>
+        <option value="A$">AUD A$</option>
+        <option value="£">GBP £</option>
+        <option value="€">EUR €</option>
+        <option value="¥">JPY ¥</option>
+        <option value="S$">SGD S$</option>
+        <option value="RM">MYR RM</option>
+        <option value="₹">INR ₹</option>
+      </select>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="field"><label>Tax %</label><input id="tax-rate" type="number" value="10" min="0" max="100" oninput="render()"/></div>
+    <div class="field"><label>Discount %</label><input id="disc-rate" type="number" value="0" min="0" max="100" oninput="render()"/></div>
+  </div>
+
+  <div class="section-label">Line Items</div>
+  <div class="items-list" id="items-list"></div>
+  <button class="add-item-btn" onclick="addItem()">+ Add Item</button>
+
+  <div class="section-label">Notes</div>
+  <div class="field"><textarea id="notes" oninput="render()" placeholder="Payment terms, bank details, thank-you message…">Payment due within 30 days.
+Bank transfer preferred.
+BSB: 000-000  Account: 12345678</textarea></div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="window.print()">🖨 Print / Save PDF</button>
+    <button class="btn btn-outline" onclick="copyLink()">🔗 Copy Share Link</button>
+  </div>
+</aside>
+
+<!-- ── PREVIEW ── -->
+<main class="preview-pane">
+  <div class="preview-wrap">
+    <div class="preview-header"><h2>Live Preview</h2></div>
+    <div id="invoice-canvas"></div>
+  </div>
+</main>
+</div>
+
+<script>
+let currentTemplate = 'classic';
+let items = [
+  { desc: 'Web Design & Development', qty: 1, rate: 3500 },
+  { desc: 'SEO Optimisation', qty: 1, rate: 800 },
+  { desc: 'Monthly Maintenance', qty: 3, rate: 250 },
+];
+
+(function(){
+  const t = new Date(); document.getElementById('inv-date').value = t.toISOString().split('T')[0];
+  const d = new Date(t); d.setDate(d.getDate()+30); document.getElementById('due-date').value = d.toISOString().split('T')[0];
+})();
+
+function setTemplate(t, btn){
+  currentTemplate = t;
+  document.querySelectorAll('.tpl-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+function addItem(){ items.push({desc:'New Service', qty:1, rate:0}); renderItems(); render(); }
+function removeItem(i){ items.splice(i,1); renderItems(); render(); }
+
+function renderItems(){
+  document.getElementById('items-list').innerHTML = items.map((item,i)=>`
+    <div class="item-row">
+      <button class="remove-btn" onclick="removeItem(${i})">×</button>
+      <input value="${item.desc}" oninput="items[${i}].desc=this.value;render()" style="width:100%;margin-bottom:4px;font-weight:600"/>
+      <div class="item-meta">
+        <div><label style="font-size:10px;color:var(--muted)">Qty</label>
+          <input type="number" value="${item.qty}" oninput="items[${i}].qty=+this.value;render()" min="0"/></div>
+        <div><label style="font-size:10px;color:var(--muted)">Rate</label>
+          <input type="number" value="${item.rate}" oninput="items[${i}].rate=+this.value;render()" min="0"/></div>
+        <div><label style="font-size:10px;color:var(--muted)">Amount</label>
+          <input readonly value="${(item.qty*item.rate).toFixed(2)}" style="color:var(--muted)"/></div>
+      </div>
+    </div>`).join('');
+}
+
+function g(id){ return (document.getElementById(id)||{}).value||''; }
+function fmt(n){ return g('currency')+Number(n).toFixed(2); }
+
+function calcTotals(){
+  const sub = items.reduce((s,i)=>s+i.qty*i.rate,0);
+  const disc = sub*(parseFloat(g('disc-rate'))||0)/100;
+  const tax = (sub-disc)*(parseFloat(g('tax-rate'))||0)/100;
+  return { sub, disc, tax, total: sub-disc+tax };
+}
+function itemRows(){
+  return items.map(i=>`<tr><td>${i.desc}</td><td class="col-r">${i.qty}</td><td class="col-r">${fmt(i.rate)}</td><td class="col-r">${fmt(i.qty*i.rate)}</td></tr>`).join('');
+}
+function totalsRows(){
+  const {sub,disc,tax,total} = calcTotals();
+  const dr=parseFloat(g('disc-rate'))||0, tr=parseFloat(g('tax-rate'))||0;
+  return `<div class="totals-row"><span>Subtotal</span><span>${fmt(sub)}</span></div>`
+    +(dr?`<div class="totals-row"><span>Discount (${dr}%)</span><span>-${fmt(disc)}</span></div>`:'')
+    +(tr?`<div class="totals-row"><span>Tax (${tr}%)</span><span>${fmt(tax)}</span></div>`:'')
+    +`<div class="totals-row total"><span>Total Due</span><span>${fmt(total)}</span></div>`;
+}
+
+function render(){
+  const canvas = document.getElementById('invoice-canvas');
+  const fromName=g('from-name'), fromDet=g('from-detail').replace(/\n/g,'<br>');
+  const toName=g('to-name'), toDet=g('to-detail').replace(/\n/g,'<br>');
+  const num=g('inv-num'), date=g('inv-date'), due=g('due-date'), notes=g('notes');
+  const notesHtml = notes?notes.replace(/\n/g,'<br>'):'';
+  const thead = `<thead><tr><th>Description</th><th class="col-r">Qty</th><th class="col-r">Rate</th><th class="col-r">Amount</th></tr></thead>`;
+
+  if(currentTemplate==='classic'){
+    canvas.innerHTML=`<div class="tpl-classic">
+      <div class="inv-header">
+        <div><div class="inv-brand">${fromName}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${fromDet}</div></div>
+        <div style="text-align:right"><div class="inv-title">Invoice</div><div class="inv-num">${num}</div></div>
+      </div>
+      <div class="inv-parties">
+        <div><div class="party-label">From</div><div class="party-name">${fromName}</div><div class="party-detail">${fromDet}</div></div>
+        <div><div class="party-label">Bill To</div><div class="party-name">${toName}</div><div class="party-detail">${toDet}</div></div>
+      </div>
+      <div class="inv-meta">
+        <div class="meta-item"><div class="meta-key">Invoice #</div><div class="meta-val">${num}</div></div>
+        <div class="meta-item"><div class="meta-key">Issue Date</div><div class="meta-val">${date}</div></div>
+        <div class="meta-item"><div class="meta-key">Due Date</div><div class="meta-val">${due}</div></div>
+      </div>
+      <table>${thead}<tbody>${itemRows()}</tbody></table>
+      <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+      ${notes?`<div class="inv-notes"><strong>Notes:</strong><br>${notesHtml}</div>`:''}
+      <div class="inv-footer">Thank you for your business!</div>
+    </div>`;
+  } else if(currentTemplate==='modern'){
+    canvas.innerHTML=`<div class="tpl-modern">
+      <div class="mod-sidebar">
+        <div class="mod-brand">${fromName}</div>
+        <div class="mod-accent-line"></div>
+        <div class="mod-label">Invoice #</div><div class="mod-value">${num}</div>
+        <div class="mod-label">Issue Date</div><div class="mod-value">${date}</div>
+        <div class="mod-label">Due Date</div><div class="mod-value">${due}</div>
+        <div class="mod-label">From</div><div class="mod-value">${fromDet}</div>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title-row"><div class="mod-invoice-title">INVOICE</div><div class="mod-meta">${toName}<br>${toDet}</div></div>
+        <div class="mod-to"><div class="mod-to-label">Billed To</div><div class="mod-to-name">${toName}</div><div class="mod-to-detail">${toDet}</div></div>
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+        ${notes?`<div class="inv-notes">${notesHtml}</div>`:''}
+      </div>
+    </div>`;
+  } else if(currentTemplate==='minimal'){
+    canvas.innerHTML=`<div class="tpl-minimal">
+      <div class="min-header"><div class="min-brand">${fromName}</div><div class="min-word">Invoice</div></div>
+      <div class="min-parties">
+        <div><div class="min-label">From</div><div class="min-name">${fromName}</div><div class="min-detail">${fromDet}</div></div>
+        <div><div class="min-label">Bill To</div><div class="min-name">${toName}</div><div class="min-detail">${toDet}</div></div>
+      </div>
+      <div class="min-meta">
+        <div><div class="meta-key">Invoice #</div><div class="meta-val">${num}</div></div>
+        <div><div class="meta-key">Date</div><div class="meta-val">${date}</div></div>
+        <div><div class="meta-key">Due</div><div class="meta-val">${due}</div></div>
+      </div>
+      <table>${thead}<tbody>${itemRows()}</tbody></table>
+      <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+      ${notes?`<div class="inv-notes">${notesHtml}</div>`:''}
+    </div>`;
+  } else if(currentTemplate==='bold'){
+    canvas.innerHTML=`<div class="tpl-bold">
+      <div class="bold-top">
+        <div class="bold-top-row"><div class="bold-brand">${fromName}</div><div class="bold-num">${num}</div></div>
+        <div class="bold-parties">
+          <div><div class="bold-plabel">From</div><div class="bold-pname">${fromName}</div><div class="bold-pdetail">${fromDet}</div></div>
+          <div><div class="bold-plabel">Billed To</div><div class="bold-pname">${toName}</div><div class="bold-pdetail">${toDet}</div></div>
+        </div>
+      </div>
+      <div class="bold-meta-bar" style="color:#fff">
+        <div class="bold-meta-item"><div class="bold-mkey">Invoice #</div><div class="bold-mval">${num}</div></div>
+        <div class="bold-meta-item"><div class="bold-mkey">Issue Date</div><div class="bold-mval">${date}</div></div>
+        <div class="bold-meta-item"><div class="bold-mkey">Due Date</div><div class="bold-mval">${due}</div></div>
+      </div>
+      <div class="bold-body">
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+        ${notes?`<div class="inv-notes">${notesHtml}</div>`:''}
+        <div class="bold-footer">Thank you for your business!</div>
+      </div>
+    </div>`;
+  } else if(currentTemplate==='corp'){
+    canvas.innerHTML=`<div class="tpl-corp">
+      <div class="corp-stripe"></div>
+      <div class="corp-head">
+        <div class="corp-brand">${fromName}</div>
+        <div class="corp-inv"><div class="corp-inv-title">INVOICE</div><div class="corp-inv-num">${num}</div></div>
+      </div>
+      <div class="corp-info">
+        <div><div class="ci-label">From</div><div class="ci-name">${fromName}</div><div class="ci-detail">${fromDet}</div></div>
+        <div><div class="ci-label">Billed To</div><div class="ci-name">${toName}</div><div class="ci-detail">${toDet}</div></div>
+        <div>
+          <div><div class="ci-label">Invoice Date</div><div class="ci-name">${date}</div></div>
+          <div style="margin-top:12px"><div class="ci-label">Due Date</div><div class="ci-name">${due}</div></div>
+        </div>
+      </div>
+      <div class="corp-body">
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+        ${notes?`<div class="inv-notes">${notesHtml}</div>`:''}
+      </div>
+      <div class="corp-foot"><span>${fromName}</span><span>${num}</span></div>
+    </div>`;
+  } else if(currentTemplate==='blossom'){
+    canvas.innerHTML=`<div class="tpl-blossom">
+      <div class="bls-hero">
+        <div class="bls-brand">${fromName}</div>
+        <div class="bls-tagline">Creating with love ✨</div>
+        <div class="bls-inv-row">
+          <div class="bls-inv-word">Invoice</div>
+          <div class="bls-inv-num">${num}<br><span style="font-size:11px;font-weight:400">Due: ${due}</span></div>
+        </div>
+        <div class="bls-pills">
+          <div class="bls-pill">📅 ${date}</div>
+          <div class="bls-pill">💌 ${toName}</div>
+        </div>
+      </div>
+      <div class="bls-body">
+        <div class="bls-parties">
+          <div><div class="bls-plabel">From</div><div class="bls-pname">${fromName}</div><div class="bls-pdetail">${fromDet}</div></div>
+          <div><div class="bls-plabel">Billed To</div><div class="bls-pname">${toName}</div><div class="bls-pdetail">${toDet}</div></div>
+        </div>
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+        ${notes?`<div class="inv-notes">💕 ${notesHtml}</div>`:''}
+        <div class="bls-footer">Thank you so much! 🌸</div>
+      </div>
+    </div>`;
+  } else if(currentTemplate==='neon'){
+    canvas.innerHTML=`<div class="tpl-neon">
+      <div class="neo-header">
+        <div>
+          <div class="neo-brand">${fromName}</div>
+          <div class="neo-tagline">// DIGITAL INVOICE SYSTEM</div>
+        </div>
+        <div class="neo-inv-num">
+          <div class="neo-label">Invoice ID</div>
+          <div class="neo-val">${num}</div>
+        </div>
+      </div>
+      <div class="neo-body">
+        <div class="neo-parties">
+          <div><div class="neo-plabel">From</div><div class="neo-pname">${fromName}</div><div class="neo-pdetail">${fromDet}</div></div>
+          <div><div class="neo-plabel">Billed To</div><div class="neo-pname">${toName}</div><div class="neo-pdetail">${toDet}</div></div>
+        </div>
+        <div class="neo-meta">
+          <div class="neo-meta-item"><div class="neo-mk">Issue Date</div><div class="neo-mv">${date}</div></div>
+          <div class="neo-meta-item"><div class="neo-mk">Due Date</div><div class="neo-mv">${due}</div></div>
+          <div class="neo-meta-item"><div class="neo-mk">Status</div><div class="neo-mv" style="color:#a855f7">PENDING</div></div>
+        </div>
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+        ${notes?`<div class="inv-notes">// NOTES<br>${notesHtml}</div>`:''}
+      </div>
+      <div class="neo-footer">// END OF INVOICE — ${fromName.toUpperCase()}</div>
+    </div>`;
+  } else if(currentTemplate==='sun'){
+    canvas.innerHTML=`<div class="tpl-sun">
+      <div class="sun-top">
+        <div class="sun-brand-box">
+          <div class="sun-brand">${fromName}</div>
+          <div class="sun-sub">Invoice for ${toName}</div>
+        </div>
+        <div class="sun-badge">
+          <div class="sun-badge-word">Invoice</div>
+          <div class="sun-badge-num">${num}</div>
+        </div>
+      </div>
+      <div class="sun-body">
+        <div class="sun-parties">
+          <div><div class="sun-plabel">From</div><div class="sun-pname">${fromName}</div><div class="sun-pdetail">${fromDet}</div></div>
+          <div><div class="sun-plabel">Billed To</div><div class="sun-pname">${toName}</div><div class="sun-pdetail">${toDet}</div></div>
+        </div>
+        <div class="sun-meta">
+          <div class="sun-meta-item"><div class="sun-mk">Issue Date</div><div class="sun-mv">${date}</div></div>
+          <div class="sun-meta-item"><div class="sun-mk">Due Date</div><div class="sun-mv">${due}</div></div>
+        </div>
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+        ${notes?`<div class="inv-notes">${notesHtml}</div>`:''}
+        <div class="sun-footer">☀️ Thank you for your support!</div>
+      </div>
+    </div>`;
+  } else if(currentTemplate==='sage'){
+    canvas.innerHTML=`<div class="tpl-sage">
+      <div class="sage-header">
+        <div>
+          <div class="sage-brand">${fromName}</div>
+          <div class="sage-brandtag">handcrafted with care</div>
+        </div>
+        <div class="sage-inv-block">
+          <div class="sage-inv-label">Invoice</div>
+          <div class="sage-inv-num">${num}</div>
+        </div>
+      </div>
+      <div class="sage-divider"></div>
+      <div class="sage-parties">
+        <div><div class="sage-plabel">From</div><div class="sage-pname">${fromName}</div><div class="sage-pdetail">${fromDet}</div></div>
+        <div><div class="sage-plabel">Billed To</div><div class="sage-pname">${toName}</div><div class="sage-pdetail">${toDet}</div></div>
+      </div>
+      <div class="sage-meta">
+        <div class="sage-meta-item"><div class="sage-mk">Issue Date</div><div class="sage-mv">${date}</div></div>
+        <div class="sage-meta-item"><div class="sage-mk">Due Date</div><div class="sage-mv">${due}</div></div>
+      </div>
+      <div class="sage-table-wrap">
+        <table>${thead}<tbody>${itemRows()}</tbody></table>
+        <div class="totals"><div class="totals-box">${totalsRows()}</div></div>
+      </div>
+      ${notes?`<div class="inv-notes">${notesHtml}</div>`:''}
+      <div class="sage-footer">Thank you for choosing ${fromName} 🌿</div>
+    </div>`;
+  }
+}
+
+function copyLink(){
+  const state={from:g('from-name'),fromD:g('from-detail'),to:g('to-name'),toD:g('to-detail'),num:g('inv-num'),date:g('inv-date'),due:g('due-date'),tax:g('tax-rate'),disc:g('disc-rate'),cur:g('currency'),notes:g('notes'),tpl:currentTemplate,items};
+  const url=location.href.split('#')[0]+'#'+btoa(encodeURIComponent(JSON.stringify(state)));
+  navigator.clipboard.writeText(url).then(()=>alert('Link copied! Share it to let anyone view this invoice.'));
+}
+
+function loadFromHash(){
+  if(!location.hash) return;
+  try {
+    const s=JSON.parse(decodeURIComponent(atob(location.hash.slice(1))));
+    ['from-name','from-detail','to-name','to-detail','inv-num','inv-date','due-date','tax-rate','disc-rate','notes'].forEach(id=>{
+      const map={['from-name']:'from',['from-detail']:'fromD',['to-name']:'to',['to-detail']:'toD',['inv-num']:'num',['inv-date']:'date',['due-date']:'due',['tax-rate']:'tax',['disc-rate']:'disc','notes':'notes'};
+      if(s[map[id]]!==undefined) document.getElementById(id).value=s[map[id]];
+    });
+    document.getElementById('currency').value=s.cur||'$';
+    items=s.items||items;
+    currentTemplate=s.tpl||'classic';
+    const tplMap=['classic','modern','minimal','bold','corp','blossom','neon','sun','sage'];
+    const idx=tplMap.indexOf(currentTemplate);
+    document.querySelectorAll('.tpl-btn').forEach(b=>b.classList.remove('active'));
+    if(idx>=0) document.querySelectorAll('.tpl-btn')[idx].classList.add('active');
+  } catch(e){}
+}
+
+loadFromHash();
+renderItems();
+render();
+</script>
+</body>
+</html>
